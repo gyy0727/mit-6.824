@@ -1,100 +1,110 @@
-package main
+package labrpc
+import"github.com/gyy0727/labrpc"
+import "testing"
+import "strconv"
+import "sync"
+import "runtime"
+import "time"
+import "fmt"
 
-import (
-	"bytes"
-	"fmt"
-	"github.com/gyy0727/mit-6.824/labgob"  
-)
-
-// 模拟 TestGOB 测试
-func TestGOBManual() {
-	type T1 struct {
-		T1int0    int
-		T1int1    int
-		T1string0 string
-		T1string1 string
-	}
-
-	type T2 struct {
-		T2slice []T1
-		T2map   map[int]*T1
-		T2t3    interface{}
-	}
-
-	type T3 struct {
-		T3int999 int
-	}
-
-	var errorCount int // 用于模拟 errorCount 变量
-	e0 := errorCount
-
-	w := new(bytes.Buffer)
-
-	// 注册结构体
-	labgob.Register(T3{})
-
-	// 初始化测试数据
-	x0 := 0
-	x1 := 1
-	t1 := T1{T1int1: 1, T1string1: "6.824"}
-	t2 := T2{
-		T2slice: []T1{{}, t1},
-		T2map:   map[int]*T1{99: {1, 2, "x", "y"}},
-		T2t3:    T3{999},
-	}
-
-	// 编码
-	e := labgob.NewEncoder(w)
-	e.Encode(x0)
-	e.Encode(x1)
-	e.Encode(t1)
-	e.Encode(t2)
-
-	data := w.Bytes()
-
-	// 解码
-	var d_x0, d_x1 int
-	var d_t1 T1
-	var d_t2 T2
-	r := bytes.NewBuffer(data)
-	d := labgob.NewDecoder(r)
-	d.Decode(&d_x0)
-	d.Decode(&d_x1)
-	d.Decode(&d_t1)
-	d.Decode(&d_t2)
-
-	// 验证
-	if d_x0 != 0 || d_x1 != 1 {
-		fmt.Println("Failed: x0 or x1 mismatch")
-		return
-	}
-	if d_t1.T1int1 != 1 || d_t1.T1string1 != "6.824" {
-		fmt.Println("Failed: t1 values mismatch")
-		return
-	}
-	if len(d_t2.T2slice) != 2 || d_t2.T2slice[1].T1int1 != 1 {
-		fmt.Println("Failed: t2.T2slice mismatch")
-		return
-	}
-	if len(d_t2.T2map) != 1 || d_t2.T2map[99].T1string1 != "y" {
-		fmt.Println("Failed: t2.T2map mismatch")
-		return
-	}
-	t3 := d_t2.T2t3.(T3)
-	if t3.T3int999 != 999 {
-		fmt.Println("Failed: t2.T2t3 mismatch")
-		return
-	}
-
-	if errorCount != e0 {
-		fmt.Println("Errors occurred during encoding/decoding")
-		return
-	}
-
-	fmt.Println("TestGOB passed successfully!")
+//*参数
+type JunkArgs struct {
+	X int
+}
+//*响应体
+type JunkReply struct {
+	X string
 }
 
-func main() {
-	fmt.Println("Running TestGOB...")
-	TestGOBManual()
+//*服务器
+type JunkServer struct {
+	mu   sync.Mutex
+	log1 []string
+	log2 []int
+}
+
+//*处理函数1
+func (js *JunkServer) Handler1(args string, reply *int) {
+	js.mu.Lock()
+	defer js.mu.Unlock()
+	js.log1 = append(js.log1, args)
+	*reply, _ = strconv.Atoi(args)
+}
+
+//*处理函数2
+func (js *JunkServer) Handler2(args int, reply *string) {
+	js.mu.Lock()
+	defer js.mu.Unlock()
+	js.log2 = append(js.log2, args)
+	*reply = "handler2-" + strconv.Itoa(args)
+}
+//*处理函数3
+func (js *JunkServer) Handler3(args int, reply *int) {
+	js.mu.Lock()
+	defer js.mu.Unlock()
+	time.Sleep(20 * time.Second)
+	*reply = -args
+}
+
+//*处理函数4
+func (js *JunkServer) Handler4(args *JunkArgs, reply *JunkReply) {
+	reply.X = "pointer"
+}
+
+//*处理函数5
+func (js *JunkServer) Handler5(args JunkArgs, reply *JunkReply) {
+	reply.X = "no pointer"
+}
+
+//*处理函数6
+func (js *JunkServer) Handler6(args string, reply *int) {
+	js.mu.Lock()
+	defer js.mu.Unlock()
+	*reply = len(args)
+}
+
+//*处理函数7
+func (js *JunkServer) Handler7(args int, reply *string) {
+	js.mu.Lock()
+	defer js.mu.Unlock()
+	*reply = ""
+	for i := 0; i < args; i++ {
+		*reply = *reply + "y"
+	}
+}
+
+
+func main(){
+  runtime.GOMAXPROCS(4)
+
+	rn := MakeNetwork()
+	defer rn.Cleanup()
+
+	e := rn.MakeEnd("end1-99")
+
+	js := &JunkServer{}
+	svc := MakeService(js)
+
+	rs := MakeServer()
+	rs.AddService(svc)
+	rn.AddServer("server99", rs)
+
+	rn.Connect("end1-99", "server99")
+	rn.Enable("end1-99", true)
+
+	{
+		reply := ""
+		e.Call("JunkServer.Handler2", 111, &reply)
+		if reply != "handler2-111" {
+			t.Fatalf("wrong reply from Handler2")
+		}
+	}
+
+	{
+		reply := 0
+		e.Call("JunkServer.Handler1", "9099", &reply)
+		if reply != 9099 {
+			t.Fatalf("wrong reply from Handler1")
+		}
+	}
 }
