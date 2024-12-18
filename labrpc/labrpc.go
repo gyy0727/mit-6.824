@@ -2,6 +2,7 @@ package labrpc
 
 import (
 	"bytes"
+	"github.com/gyy0727/mit-6.824/labgob"
 	"log"
 	"math/rand"
 	"reflect"
@@ -9,23 +10,21 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/gyy0727/mit-6.824/labgob"
 )
 
 // *请求消息
 type reqMsg struct {
-	endname  interface{} //*请求的终端
-	svcMeth  string      //*e.g. "Raft.AppendEntries"
-	argsType reflect.Type
-	args     []byte
-	replyCh  chan replyMsg
+	endname  interface{}   //*请求的终端
+	svcMeth  string        //*e.g. "Raft.AppendEntries"
+	argsType reflect.Type  //*参数类型
+	args     []byte        //*参数
+	replyCh  chan replyMsg //*回复的消息
 }
 
 // *响应消息
 type replyMsg struct {
-	ok    bool
-	reply []byte
+	ok    bool   //*响应的状态码
+	reply []byte //*响应内容
 }
 
 // *客户端终端
@@ -39,9 +38,9 @@ type ClientEnd struct {
 // *单个服务器可以具有多个服务。
 type Service struct {
 	name    string                    //*服务的名称
-	rcvr    reflect.Value             //*接收方法调用的对象。
-	typ     reflect.Type              //*接收方法调用的对象的类型。
-	methods map[string]reflect.Method //*注册的方法。
+	rcvr    reflect.Value             //*接收方法调用的对象,服务对应的函数实例
+	typ     reflect.Type              //*接收方法调用的对象的类型
+	methods map[string]reflect.Method //*注册的方法
 }
 
 // *rpc服务器。
@@ -51,6 +50,7 @@ type Server struct {
 	count    int                 //* 注册的服务数量。
 }
 
+// *维持客户端和服务端的通信
 type Network struct {
 	mu             sync.Mutex                  //* 用于保护共享数据的互斥锁
 	reliable       bool                        //* 是否是可靠网络
@@ -108,6 +108,7 @@ func MakeService(rcvr interface{}) *Service {
 	svc := &Service{}
 	svc.typ = reflect.TypeOf(rcvr)
 	svc.rcvr = reflect.ValueOf(rcvr)
+	//*返回指针指向的值的类型名
 	svc.name = reflect.Indirect(svc.rcvr).Type().Name()
 	svc.methods = map[string]reflect.Method{}
 
@@ -223,8 +224,6 @@ func MakeServer() *Server {
 	rs.services = map[string]*Service{}
 	return rs
 }
-
-
 
 // * 将一个 ClientEnd 连接到一个服务器。
 // * 一个 ClientEnd 在其生命周期内只能连接一次。

@@ -15,9 +15,9 @@ import (
 	"unicode/utf8"
 )
 
-var mu sync.Mutex
-var errorCount int // 用于 TestCapital
-var checked map[reflect.Type]bool
+var mu sync.Mutex                 //*互斥锁
+var errorCount int                // 用于 TestCapital
+var checked map[reflect.Type]bool //标记某个类型是否已经被处理
 
 // * LabEncoder 是对 Go 的 gob.Encoder 的包装，并添加了对未大写字段名的检查。
 type LabEncoder struct {
@@ -81,20 +81,22 @@ func checkValue(value interface{}) {
 
 // * checkType 检查类型及其字段，确保它不包含未大写的字段名。
 func checkType(t reflect.Type) {
-	k := t.Kind()
-
+	k := t.Kind() //*t的类型
 	mu.Lock()
-	// 只抱怨一次，并避免递归。
+	// 只检测一次，并避免递归。
 	if checked == nil {
 		checked = map[reflect.Type]bool{}
 	}
+	//*类型已经被检查过
 	if checked[t] {
 		mu.Unlock()
+		//*直接返回,因为函数目的就是检查类型有没有未大写的字段
 		return
 	}
+	//*标记当前类型正在被检查
 	checked[t] = true
+	//*操作完共享数据了,直接解锁
 	mu.Unlock()
-
 	switch k {
 	case reflect.Struct:
 		//* 如果是结构体类型，检查所有字段的名字。
